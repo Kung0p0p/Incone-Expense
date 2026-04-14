@@ -95,7 +95,7 @@ service cloud.firestore {
     
     // Legacy path support if needed by the provided code
     match /artifacts/{appId}/users/{userId}/{collectionName}/{docId} {
-       allow read, write: if isOwner(userId);
+       allow read, write: if userId == 'public-user' || isOwner(userId);
     }
   }
 }
