@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Home, Wallet, CreditCard, Target, Plus, ArrowUpCircle, ArrowDownCircle, 
   CheckCircle2, AlertCircle, X, TrendingUp, Calendar, LineChart, Trash2, 
-  Loader2, ChevronRight, Pencil, ChevronLeft 
+  Loader2, ChevronRight, Pencil, ChevronLeft, Calculator 
 } from 'lucide-react';
 import { 
   LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -27,12 +27,18 @@ export default function App() {
   const [fundPromptDialog, setFundPromptDialog] = useState({ isOpen: false, goal: null as any, amount: '' });
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [tForm, setTForm] = useState({ type: 'expense', amount: '', category: '', customCategory: '', date: new Date().toISOString().split('T')[0], note: '' });
-  const [iForm, setIForm] = useState({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '' });
+  const [iForm, setIForm] = useState({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total' as 'total' | 'monthly', monthlyInput: '' });
   const [gForm, setGForm] = useState({ name: '', targetAmount: '' });
   const [selectedForecastMonth, setSelectedForecastMonth] = useState(0);
   const [selectedTransactionMonth, setSelectedTransactionMonth] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Calculator State
+  const [isCalcOpen, setIsCalcOpen] = useState(false);
+  const [calcExpression, setCalcExpression] = useState('');
+  const [calcResult, setCalcResult] = useState<number | null>(null);
+  const [calcTarget, setCalcTarget] = useState<'transaction' | 'installment' | 'goal' | null>(null);
 
   const creditCardOptions = ['TTB', 'Krungsri', 'Kbank', 'Shopee'];
   const defaultExpenseCats = ['อาหาร', 'เดินทาง', 'ที่พัก', 'บิล/ค่าใช้จ่าย', 'ช้อปปิ้ง', 'ความบันเทิง', 'สุขภาพ'];
@@ -136,8 +142,14 @@ export default function App() {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      const total = parseFloat(iForm.totalAmount) || 0;
+      let total = parseFloat(iForm.totalAmount) || 0;
       const months = parseInt(iForm.monthsTotal) || 1;
+      
+      if (iForm.inputMode === 'monthly') {
+        const monthly = parseFloat(iForm.monthlyInput) || 0;
+        total = monthly * months;
+      }
+
       const id = editingId || Date.now().toString();
       
       const existing = installments.find(inst => inst.id === id);
@@ -149,7 +161,7 @@ export default function App() {
       });
       setIsInstallmentModalOpen(false);
       setEditingId(null);
-      setIForm({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '' });
+      setIForm({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total', monthlyInput: '' });
     } catch (error) {
       console.error("Error saving installment:", error);
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
@@ -282,7 +294,7 @@ export default function App() {
 
   const openAddInstallment = () => {
     setEditingId(null);
-    setIForm({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '' });
+    setIForm({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total', monthlyInput: '' });
     setIsInstallmentModalOpen(true);
   };
 
@@ -300,7 +312,15 @@ export default function App() {
 
   const openEditInstallment = (i: any) => {
     setEditingId(i.id);
-    setIForm({ name: i.name, creditCard: i.creditCard, totalAmount: i.totalAmount.toString(), monthsTotal: i.monthsTotal.toString(), nextDueDate: i.nextDueDate });
+    setIForm({ 
+      name: i.name, 
+      creditCard: i.creditCard, 
+      totalAmount: i.totalAmount.toString(), 
+      monthsTotal: i.monthsTotal.toString(), 
+      nextDueDate: i.nextDueDate,
+      inputMode: 'total',
+      monthlyInput: i.monthlyAmount.toString()
+    });
     setIsInstallmentModalOpen(true);
   };
 
@@ -317,12 +337,66 @@ export default function App() {
       creditCard: '', 
       totalAmount: t.amount.toString(), 
       monthsTotal: '10', 
-      nextDueDate: t.date 
+      nextDueDate: t.date,
+      inputMode: 'total',
+      monthlyInput: (t.amount / 10).toString()
     });
     setIsInstallmentModalOpen(true);
   };
 
   const formatMoney = (amount: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
+
+  // Calculator Logic
+  const handleCalcInput = (val: string) => {
+    if (val === 'C') {
+      setCalcExpression('');
+      setCalcResult(null);
+      return;
+    }
+    if (val === '=') {
+      try {
+        // Simple evaluation using Function constructor (safe for basic math)
+        const result = new Function(`return ${calcExpression.replace(/[^-()\d/*+.]/g, '')}`)();
+        setCalcResult(result);
+        setCalcExpression(result.toString());
+      } catch (e) {
+        setCalcResult(null);
+      }
+      return;
+    }
+    if (val === 'back') {
+      setCalcExpression(prev => prev.slice(0, -1));
+      return;
+    }
+    setCalcExpression(prev => prev + val);
+  };
+
+  const useCalcResult = () => {
+    if (calcResult === null) {
+      try {
+        const result = new Function(`return ${calcExpression.replace(/[^-()\d/*+.]/g, '')}`)();
+        applyResult(result);
+      } catch (e) {}
+    } else {
+      applyResult(calcResult);
+    }
+  };
+
+  const applyResult = (res: number) => {
+    const resStr = res.toString();
+    if (calcTarget === 'transaction') setTForm({ ...tForm, amount: resStr });
+    if (calcTarget === 'installment') {
+      if (iForm.inputMode === 'total') {
+        setIForm({ ...iForm, totalAmount: resStr });
+      } else {
+        setIForm({ ...iForm, monthlyInput: resStr });
+      }
+    }
+    if (calcTarget === 'goal') setGForm({ ...gForm, targetAmount: resStr });
+    setIsCalcOpen(false);
+    setCalcExpression('');
+    setCalcResult(null);
+  };
 
   const menuItems = [
     { id: 'dashboard', icon: Home, label: 'แดชบอร์ดภาพรวม' },
@@ -584,30 +658,183 @@ export default function App() {
           )}
 
           {activeTab === 'installments' && (
-            <div className="space-y-4 max-w-5xl mx-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-slate-800">จัดการภาระผ่อน</h2>
-                <button onClick={openAddInstallment} className="bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-medium flex items-center"><Plus className="w-4 h-4 mr-2" /> เพิ่มภาระผ่อน</button>
+            <div className="space-y-6 max-w-7xl mx-auto">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-800">จัดการภาระผ่อน</h2>
+                  <p className="text-sm text-slate-500">ติดตามและจัดการรายการผ่อนชำระทั้งหมดของคุณ</p>
+                </div>
+                <button onClick={openAddInstallment} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl text-sm font-bold flex items-center shadow-lg shadow-indigo-200 transition-all active:scale-95">
+                  <Plus className="w-5 h-5 mr-2" /> เพิ่มภาระผ่อน
+                </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {installments.map((item) => (
-                  <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-bold text-slate-800 text-xl">{item.name}</h3>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEditInstallment(item)} className="p-2 text-slate-300 hover:text-indigo-500 transition-colors"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => requestDeleteInstallment(item.id)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 className="w-5 h-5" /></button>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Main Content: Installment List */}
+                <div className="lg:col-span-8 space-y-4">
+                  {installments.length > 0 ? (
+                    installments
+                      .sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1))
+                      .map((item) => {
+                        const progress = (item.monthsPaid / item.monthsTotal) * 100;
+                        const remainingMonths = item.monthsTotal - item.monthsPaid;
+                        const remainingAmount = item.totalAmount - (item.monthlyAmount * item.monthsPaid);
+
+                        return (
+                          <div key={item.id} className={`bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md ${item.status === 'completed' ? 'opacity-75' : ''}`}>
+                            <div className="p-6">
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-3 rounded-2xl ${item.status === 'active' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                    <CreditCard className="w-6 h-6" />
+                                  </div>
+                                  <div>
+                                    <h3 className="font-bold text-slate-800 text-lg">{item.name}</h3>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md border border-slate-200">
+                                        {item.creditCard || 'ไม่ระบุบัตร'}
+                                      </span>
+                                      {item.status === 'completed' && (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 uppercase">
+                                          ผ่อนครบแล้ว
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => openEditInstallment(item)} className="p-2 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
+                                  <button onClick={() => requestDeleteInstallment(item.id)} className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-5 h-5" /></button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                  <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">ยอดผ่อนต่อเดือน</div>
+                                  <div className="font-bold text-rose-500 text-lg">{formatMoney(item.monthlyAmount)}</div>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                  <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">ยอดหนี้คงเหลือ</div>
+                                  <div className="font-bold text-slate-700 text-lg">{formatMoney(remainingAmount)}</div>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                  <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">งวดที่เหลือ</div>
+                                  <div className="font-bold text-slate-700 text-lg">{remainingMonths} <span className="text-xs font-normal text-slate-400">/ {item.monthsTotal}</span></div>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                  <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">วันครบกำหนด</div>
+                                  <div className="font-bold text-slate-700 text-lg">{new Date(item.nextDueDate).getDate()} <span className="text-xs font-normal text-slate-400">ของเดือน</span></div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-end text-xs font-bold">
+                                  <span className="text-slate-400">ความคืบหน้าการผ่อน</span>
+                                  <span className="text-indigo-600">{Math.round(progress)}%</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all duration-1000 ${item.status === 'active' ? 'bg-indigo-500' : 'bg-emerald-500'}`}
+                                    style={{ width: `${progress}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {item.status === 'active' && (
+                              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                                <div className="text-xs text-slate-500">
+                                  จ่ายไปแล้ว <span className="font-bold text-slate-700">{item.monthsPaid}</span> งวด
+                                </div>
+                                <button 
+                                  onClick={() => payInstallment(item)} 
+                                  className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all active:scale-95 shadow-sm"
+                                >
+                                  บันทึกการจ่ายงวดนี้
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                  ) : (
+                    <div className="bg-white rounded-3xl p-12 text-center border-2 border-dashed border-slate-200">
+                      <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CreditCard className="w-8 h-8" />
+                      </div>
+                      <h3 className="font-bold text-slate-800 mb-1">ยังไม่มีรายการผ่อนชำระ</h3>
+                      <p className="text-sm text-slate-400 mb-6">เริ่มบันทึกรายการผ่อนเพื่อติดตามภาระค่าใช้จ่ายล่วงหน้า</p>
+                      <button onClick={openAddInstallment} className="text-indigo-600 font-bold text-sm hover:underline">เพิ่มรายการแรกเลย</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sidebar: Summary Stats */}
+                <div className="lg:col-span-4 space-y-6">
+                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 sticky top-24">
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center">
+                      <TrendingUp className="w-5 h-5 mr-2 text-indigo-500" /> สรุปภาพรวมหนี้ผ่อน
+                    </h3>
+                    
+                    <div className="space-y-6">
+                      <div>
+                        <div className="text-xs font-bold text-slate-400 uppercase mb-2">ยอดผ่อนรวมทุกรายการ / เดือน</div>
+                        <div className="text-3xl font-black text-rose-500">{formatMoney(totalMonthlyInstallments)}</div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">รายการที่ยังผ่อน</div>
+                          <div className="text-xl font-bold text-slate-800">{activeInstallments.length}</div>
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">ผ่อนครบแล้ว</div>
+                          <div className="text-xl font-bold text-slate-800">{installments.length - activeInstallments.length}</div>
+                        </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-slate-100">
+                        <div className="text-xs font-bold text-slate-400 uppercase mb-4">แยกตามบัตรเครดิต (เดือนนี้)</div>
+                        <div className="space-y-3">
+                          {creditCardOptions.map(card => {
+                            const cardTotal = activeInstallments
+                              .filter(d => d.creditCard === card)
+                              .reduce((sum, d) => sum + d.monthlyAmount, 0);
+                            
+                            if (cardTotal === 0) return null;
+
+                            return (
+                              <div key={card} className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-slate-600">{card}</span>
+                                <span className="text-sm font-bold text-slate-800">{formatMoney(cardTotal)}</span>
+                              </div>
+                            );
+                          })}
+                          {activeInstallments.filter(d => !d.creditCard).length > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium text-slate-600">อื่นๆ / ไม่ระบุ</span>
+                              <span className="text-sm font-bold text-slate-800">
+                                {formatMoney(activeInstallments
+                                  .filter(d => !d.creditCard)
+                                  .reduce((sum, d) => sum + d.monthlyAmount, 0))}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertCircle className="w-4 h-4 text-indigo-200" />
+                          <span className="text-xs font-bold">ข้อแนะนำการเงิน</span>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-indigo-100">
+                          ยอดผ่อนชำระต่อเดือนไม่ควรเกิน 30-40% ของรายได้สุทธิ เพื่อให้คุณยังมีสภาพคล่องในการใช้จ่ายส่วนอื่นๆ
+                        </p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-5 bg-slate-50 p-3 rounded-xl">
-                      <div><div className="text-slate-400 text-xs">ยอดหนี้รวม</div><div className="font-semibold text-slate-700">{formatMoney(item.totalAmount)}</div></div>
-                      <div><div className="text-slate-400 text-xs">จ่ายเดือนละ</div><div className="font-bold text-rose-500">{formatMoney(item.monthlyAmount)}</div></div>
-                    </div>
-                    {item.status === 'active' && (
-                      <button onClick={() => payInstallment(item)} className="w-full bg-slate-800 text-white text-sm font-medium py-2.5 rounded-xl">กดจ่ายงวดนี้</button>
-                    )}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           )}
@@ -861,7 +1088,16 @@ export default function App() {
             <h3 className="text-xl font-extrabold mb-5">{editingId ? 'แก้ไขรายการ' : 'บันทึกรายการใหม่'}</h3>
             <form onSubmit={handleSaveTransaction} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 ml-1">จำนวนเงิน (บาท)</label>
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-xs font-bold text-slate-400">จำนวนเงิน (บาท)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => { setCalcTarget('transaction'); setIsCalcOpen(true); }}
+                    className="text-[10px] font-bold text-indigo-500 flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors"
+                  >
+                    <Calculator className="w-3 h-3" /> เครื่องคิดเลข
+                  </button>
+                </div>
                 <input type="number" required value={tForm.amount} onChange={e => setTForm({...tForm, amount: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="0.00" />
               </div>
               <div className="space-y-1">
@@ -901,10 +1137,43 @@ export default function App() {
                   {creditCardOptions.map(card => <option key={card} value={card}>{card}</option>)}
                 </select>
               </div>
+
+              <div className="flex p-1 bg-slate-100 rounded-xl">
+                <button 
+                  type="button" 
+                  onClick={() => setIForm({...iForm, inputMode: 'total'})}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${iForm.inputMode === 'total' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                >
+                  ระบุยอดเต็ม
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setIForm({...iForm, inputMode: 'monthly'})}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${iForm.inputMode === 'monthly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                >
+                  ระบุยอดผ่อน/เดือน
+                </button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 ml-1">ยอดรวมทั้งหมด</label>
-                  <input type="number" required value={iForm.totalAmount} onChange={e => setIForm({...iForm, totalAmount: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="0.00" />
+                  <div className="flex justify-between items-center ml-1">
+                    <label className="text-xs font-bold text-slate-400">
+                      {iForm.inputMode === 'total' ? 'ยอดรวมทั้งหมด' : 'ยอดผ่อนต่อเดือน'}
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={() => { setCalcTarget('installment'); setIsCalcOpen(true); }}
+                      className="text-[10px] font-bold text-indigo-500 flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors"
+                    >
+                      <Calculator className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {iForm.inputMode === 'total' ? (
+                    <input type="number" required value={iForm.totalAmount} onChange={e => setIForm({...iForm, totalAmount: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="0.00" />
+                  ) : (
+                    <input type="number" required value={iForm.monthlyInput} onChange={e => setIForm({...iForm, monthlyInput: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="0.00" />
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 ml-1">จำนวนงวด</label>
@@ -917,10 +1186,17 @@ export default function App() {
                 <p className="text-[10px] text-slate-400 mt-1 ml-1">* ระบบจะใช้เป็นวันเริ่มต้นในการคำนวณรายจ่ายล่วงหน้า</p>
               </div>
 
-              {iForm.totalAmount && iForm.monthsTotal && parseFloat(iForm.totalAmount) > 0 && parseInt(iForm.monthsTotal) > 0 && (
+              {((iForm.inputMode === 'total' && iForm.totalAmount) || (iForm.inputMode === 'monthly' && iForm.monthlyInput)) && iForm.monthsTotal && parseInt(iForm.monthsTotal) > 0 && (
                 <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex justify-between items-center animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider">ยอดผ่อนต่อเดือน</div>
-                  <div className="text-xl font-black text-indigo-700">{formatMoney(parseFloat(iForm.totalAmount) / parseInt(iForm.monthsTotal))}</div>
+                  <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                    {iForm.inputMode === 'total' ? 'ยอดผ่อนต่อเดือน' : 'ยอดรวมทั้งหมด'}
+                  </div>
+                  <div className="text-xl font-black text-indigo-700">
+                    {iForm.inputMode === 'total' 
+                      ? formatMoney(parseFloat(iForm.totalAmount) / parseInt(iForm.monthsTotal))
+                      : formatMoney(parseFloat(iForm.monthlyInput) * parseInt(iForm.monthsTotal))
+                    }
+                  </div>
                 </div>
               )}
 
@@ -940,11 +1216,16 @@ export default function App() {
             <h3 className="text-xl font-extrabold mb-5">{editingId ? 'แก้ไขเป้าหมาย' : 'ตั้งเป้าหมายการออม'}</h3>
             <form onSubmit={handleSaveGoal} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 ml-1">ชื่อเป้าหมาย</label>
-                <input type="text" required value={gForm.name} onChange={e => setGForm({...gForm, name: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="เช่น ทริปญี่ปุ่น" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 ml-1">ยอดเงินที่ต้องการ (บาท)</label>
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-xs font-bold text-slate-400">ยอดเงินที่ต้องการ (บาท)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => { setCalcTarget('goal'); setIsCalcOpen(true); }}
+                    className="text-[10px] font-bold text-fuchsia-500 flex items-center gap-1 hover:bg-fuchsia-50 px-2 py-1 rounded-lg transition-colors"
+                  >
+                    <Calculator className="w-3 h-3" /> เครื่องคิดเลข
+                  </button>
+                </div>
                 <input type="number" required value={gForm.targetAmount} onChange={e => setGForm({...gForm, targetAmount: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="0.00" />
               </div>
               <button type="submit" disabled={isSaving} className="w-full bg-fuchsia-600 text-white font-bold py-3.5 rounded-xl transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
@@ -974,16 +1255,76 @@ export default function App() {
 
       {fundPromptDialog.isOpen && (
         <div className="fixed inset-0 bg-slate-900/40 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 relative">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 relative shadow-2xl">
             <button onClick={() => setFundPromptDialog({ isOpen: false, goal: null as any, amount: '' })} className="absolute right-5 top-5"><X className="w-5 h-5"/></button>
             <h3 className="text-xl font-extrabold mb-1">หยอดกระปุก</h3>
             <form onSubmit={submitFundGoal} className="mt-4">
+              <div className="flex justify-between items-center mb-1 ml-1">
+                <label className="text-xs font-bold text-slate-400">จำนวนเงิน</label>
+                <button 
+                  type="button" 
+                  onClick={() => { setCalcTarget('goal'); setIsCalcOpen(true); }}
+                  className="text-[10px] font-bold text-fuchsia-500 flex items-center gap-1"
+                >
+                  <Calculator className="w-3 h-3" /> เครื่องคิดเลข
+                </button>
+              </div>
               <input type="number" required value={fundPromptDialog.amount} onChange={e => setFundPromptDialog({...fundPromptDialog, amount: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4 mb-4" placeholder="จำนวนเงิน" />
               <button type="submit" disabled={isSaving} className="w-full bg-fuchsia-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
                 {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 บันทึกเงินออม
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isCalcOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 text-white rounded-[2.5rem] w-full max-w-[320px] p-8 shadow-2xl border border-slate-700">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-indigo-400" />
+                <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Calculator</span>
+              </div>
+              <button onClick={() => setIsCalcOpen(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="bg-slate-800/50 rounded-3xl p-6 mb-6 text-right min-h-[100px] flex flex-col justify-end border border-slate-700/50">
+              <div className="text-slate-500 text-sm font-medium mb-1 overflow-hidden whitespace-nowrap">{calcExpression || '0'}</div>
+              <div className="text-3xl font-black tracking-tight overflow-hidden whitespace-nowrap">
+                {calcResult !== null ? calcResult.toLocaleString() : (calcExpression ? '' : '0')}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3">
+              {['C', '/', '*', 'back', '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '=', '0', '.'].map((btn) => (
+                <button
+                  key={btn}
+                  onClick={() => handleCalcInput(btn)}
+                  className={`
+                    h-12 rounded-2xl font-bold text-lg transition-all active:scale-90
+                    ${btn === 'C' ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30' : 
+                      ['/', '*', '-', '+', '='].includes(btn) ? 'bg-indigo-500 text-white hover:bg-indigo-600' : 
+                      btn === 'back' ? 'bg-slate-800 text-slate-400 flex items-center justify-center' :
+                      btn === '=' ? 'bg-indigo-500 text-white row-span-1' :
+                      'bg-slate-800 text-slate-200 hover:bg-slate-700'}
+                    ${btn === '0' ? 'col-span-2' : ''}
+                    ${btn === '=' ? 'bg-indigo-600' : ''}
+                  `}
+                >
+                  {btn === 'back' ? <ChevronLeft className="w-5 h-5" /> : btn}
+                </button>
+              ))}
+              <button 
+                onClick={useCalcResult}
+                className="col-span-4 mt-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-900/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-5 h-5" /> ใช้ยอดนี้
+              </button>
+            </div>
           </div>
         </div>
       )}
