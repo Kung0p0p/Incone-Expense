@@ -92,25 +92,33 @@ export default function App() {
         if (inst.status === 'completed') return false;
         const nextDate = new Date(inst.nextDueDate);
         const monthDiff = (forecastDate.getFullYear() - nextDate.getFullYear()) * 12 + (forecastDate.getMonth() - nextDate.getMonth());
-        
-        // Show if:
-        // 1. It's within the plan duration (0 to monthsTotal - 1)
-        // 2. It hasn't been paid yet (monthDiff >= monthsPaid)
         return monthDiff >= 0 && monthDiff < inst.monthsTotal && monthDiff >= inst.monthsPaid;
       });
       
+      const monthTransactions = transactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getFullYear() === forecastDate.getFullYear() && txDate.getMonth() === forecastDate.getMonth();
+      });
+
       const totalInst = monthInstallments.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+      const actualIncome = monthTransactions.filter(tx => tx.type === 'income').reduce((sum, tx) => sum + tx.amount, 0);
+      const actualExpense = monthTransactions.filter(tx => tx.type === 'expense').reduce((sum, tx) => sum + tx.amount, 0);
       
+      const totalIncome = expectedIncome + actualIncome;
+      const totalExpense = totalInst + actualExpense;
+
       months.push({
         label: monthLabel,
-        income: expectedIncome,
+        income: totalIncome,
         installments: totalInst,
-        remaining: expectedIncome - totalInst,
-        details: monthInstallments
+        regularExpenses: actualExpense,
+        remaining: totalIncome - totalExpense,
+        details: monthInstallments,
+        transactions: monthTransactions
       });
     }
     return months;
-  }, [installments, expectedIncome]);
+  }, [installments, expectedIncome, transactions]);
 
   const handleSaveTransaction = async (e: any) => {
     e.preventDefault();
@@ -292,6 +300,12 @@ export default function App() {
     setIsTransactionModalOpen(true);
   };
 
+  const openAddIncome = () => {
+    setEditingId(null);
+    setTForm({ type: 'income', amount: '', category: '', customCategory: '', date: new Date().toISOString().split('T')[0], note: '' });
+    setIsTransactionModalOpen(true);
+  };
+
   const openAddInstallment = () => {
     setEditingId(null);
     setIForm({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total', monthlyInput: '' });
@@ -403,7 +417,7 @@ export default function App() {
     { id: 'transactions', icon: Wallet, label: 'บันทึกรายรับ-รายจ่าย' },
     { id: 'installments', icon: CreditCard, label: 'จัดการภาระผ่อน' },
     { id: 'goals', icon: Target, label: 'เป้าหมายการออม' },
-    { id: 'forecast', icon: LineChart, label: 'รายจ่ายล่วงหน้า' },
+    { id: 'forecast', icon: LineChart, label: 'รายการค่าใช้จ่าย' },
   ];
 
   const COLORS = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
@@ -517,7 +531,7 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">แนวโน้มรายจ่ายล่วงหน้า 12 เดือน</h3>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">แนวโน้มรายการค่าใช้จ่าย 12 เดือน</h3>
                     <button onClick={() => setActiveTab('forecast')} className="text-xs text-indigo-600 font-bold hover:underline">ดูรายละเอียดรายเดือน</button>
                   </div>
                   <div className="h-[300px] w-full">
@@ -871,7 +885,25 @@ export default function App() {
           {activeTab === 'forecast' && (
              <div className="space-y-6 max-w-7xl mx-auto">
                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                 <h2 className="text-2xl font-bold text-slate-800">รายจ่ายล่วงหน้า</h2>
+                 <div className="flex items-center gap-3">
+                   <h2 className="text-2xl font-bold text-slate-800">รายการค่าใช้จ่าย</h2>
+                   <div className="flex gap-2">
+                     <button 
+                       onClick={openAddIncome}
+                       className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors"
+                       title="เพิ่มรายรับ"
+                     >
+                       <Plus className="w-5 h-5" />
+                     </button>
+                     <button 
+                       onClick={openAddTransaction}
+                       className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-colors"
+                       title="เพิ่มรายจ่าย"
+                     >
+                       <ArrowDownCircle className="w-5 h-5" />
+                     </button>
+                   </div>
+                 </div>
                  <div className="flex flex-wrap items-center gap-3">
                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-2 flex items-center gap-2">
                      <span className="text-xs font-medium text-slate-500 pl-2">เลือกเดือน:</span>
@@ -916,12 +948,12 @@ export default function App() {
                {/* Selected Month Summary */}
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                   <div className="text-slate-400 text-xs font-medium mb-1">รายรับคาดการณ์ ({monthlyForecast[selectedForecastMonth].label})</div>
+                   <div className="text-slate-400 text-xs font-medium mb-1">รายรับรวม ({monthlyForecast[selectedForecastMonth].label})</div>
                    <div className="text-2xl font-bold text-emerald-600">{formatMoney(monthlyForecast[selectedForecastMonth].income)}</div>
                  </div>
                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                   <div className="text-slate-400 text-xs font-medium mb-1">ยอดผ่อนชำระรวม</div>
-                   <div className="text-2xl font-bold text-rose-500">{formatMoney(monthlyForecast[selectedForecastMonth].installments)}</div>
+                   <div className="text-slate-400 text-xs font-medium mb-1">รายจ่ายรวม (ผ่อน + ทั่วไป)</div>
+                   <div className="text-2xl font-bold text-rose-500">{formatMoney(monthlyForecast[selectedForecastMonth].installments + monthlyForecast[selectedForecastMonth].regularExpenses)}</div>
                  </div>
                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
                    <div className="text-slate-400 text-xs font-medium mb-1">เงินคงเหลือสุทธิ</div>
@@ -938,7 +970,7 @@ export default function App() {
                        <h3 className="font-bold text-slate-800">รายการผ่อนชำระในเดือนนี้</h3>
                        <span className="text-xs text-slate-400">{monthlyForecast[selectedForecastMonth].details.length} รายการ</span>
                      </div>
-                     <div className="overflow-x-auto">
+                     <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                        <table className="w-full text-left border-collapse">
                          <thead>
                            <tr className="bg-slate-50 border-b border-slate-100">
@@ -990,7 +1022,59 @@ export default function App() {
                      </div>
                    </div>
 
-                   <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden mb-6">
+                      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <h3 className="font-bold text-slate-800">รายรับ-รายจ่ายทั่วไป (เดือนนี้)</h3>
+                        <span className="text-xs text-slate-400">{monthlyForecast[selectedForecastMonth].transactions.length} รายการ</span>
+                      </div>
+                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-4 text-sm font-bold text-slate-600">รายการ</th>
+                              <th className="px-6 py-4 text-sm font-bold text-slate-600">หมวดหมู่</th>
+                              <th className="px-6 py-4 text-sm font-bold text-slate-600">จำนวนเงิน</th>
+                              <th className="px-6 py-4 text-sm font-bold text-slate-600">ประเภท</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {monthlyForecast[selectedForecastMonth].transactions.length > 0 ? (
+                              monthlyForecast[selectedForecastMonth].transactions.map((tx, idx) => (
+                                <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                  <td className="px-6 py-4 font-bold text-slate-700">{tx.note || 'ไม่ระบุ'}</td>
+                                  <td className="px-6 py-4">
+                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold">
+                                      {tx.category}
+                                    </span>
+                                  </td>
+                                  <td className={`px-6 py-4 font-bold ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    {tx.type === 'income' ? (
+                                      <span className="text-emerald-600 flex items-center gap-1 text-xs font-bold">
+                                        <ArrowUpCircle className="w-3 h-3" /> รายรับ
+                                      </span>
+                                    ) : (
+                                      <span className="text-rose-600 flex items-center gap-1 text-xs font-bold">
+                                        <ArrowDownCircle className="w-3 h-3" /> รายจ่าย
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">
+                                  ไม่มีรายการรายรับ-รายจ่ายทั่วไปในเดือนนี้
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                      <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">สรุปภาพรวม 12 เดือน</h3>
                      <div className="overflow-x-auto">
                        <table className="w-full text-left border-collapse">
@@ -1015,9 +1099,8 @@ export default function App() {
                        </table>
                      </div>
                    </div>
-                 </div>
 
-                 <div className="space-y-6">
+                   <div className="space-y-6">
                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
                      <h3 className="font-bold text-slate-800 mb-4">สรุปตามบัตรเครดิต</h3>
                      <div className="space-y-4">
@@ -1086,6 +1169,22 @@ export default function App() {
           <div className="bg-white rounded-3xl w-full max-w-md p-6 relative">
             <button onClick={() => { setIsTransactionModalOpen(false); setEditingId(null); }} className="absolute right-5 top-5"><X className="w-5 h-5"/></button>
             <h3 className="text-xl font-extrabold mb-5">{editingId ? 'แก้ไขรายการ' : 'บันทึกรายการใหม่'}</h3>
+            <div className="flex p-1 bg-slate-100 rounded-xl mb-4">
+              <button 
+                type="button" 
+                onClick={() => setTForm({...tForm, type: 'expense'})}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${tForm.type === 'expense' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}
+              >
+                รายจ่าย
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setTForm({...tForm, type: 'income'})}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${tForm.type === 'income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
+              >
+                รายรับ
+              </button>
+            </div>
             <form onSubmit={handleSaveTransaction} className="space-y-4">
               <div className="space-y-1">
                 <div className="flex justify-between items-center ml-1">
@@ -1183,7 +1282,7 @@ export default function App() {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 ml-1">วันที่เริ่มผ่อนงวดแรก</label>
                 <input type="date" required value={iForm.nextDueDate} onChange={e => setIForm({...iForm, nextDueDate: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" />
-                <p className="text-[10px] text-slate-400 mt-1 ml-1">* ระบบจะใช้เป็นวันเริ่มต้นในการคำนวณรายจ่ายล่วงหน้า</p>
+                <p className="text-[10px] text-slate-400 mt-1 ml-1">* ระบบจะใช้เป็นวันเริ่มต้นในการคำนวณรายการค่าใช้จ่าย</p>
               </div>
 
               {((iForm.inputMode === 'total' && iForm.totalAmount) || (iForm.inputMode === 'monthly' && iForm.monthlyInput)) && iForm.monthsTotal && parseInt(iForm.monthsTotal) > 0 && (
