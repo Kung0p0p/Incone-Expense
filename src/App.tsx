@@ -916,6 +916,14 @@ export default function App() {
                 <input type="date" required value={iForm.nextDueDate} onChange={e => setIForm({...iForm, nextDueDate: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" />
                 <p className="text-[10px] text-slate-400 mt-1 ml-1">* ระบบจะใช้เป็นวันเริ่มต้นในการคำนวณรายจ่ายล่วงหน้า</p>
               </div>
+
+              {iForm.totalAmount && iForm.monthsTotal && parseFloat(iForm.totalAmount) > 0 && parseInt(iForm.monthsTotal) > 0 && (
+                <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex justify-between items-center animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider">ยอดผ่อนต่อเดือน</div>
+                  <div className="text-xl font-black text-indigo-700">{formatMoney(parseFloat(iForm.totalAmount) / parseInt(iForm.monthsTotal))}</div>
+                </div>
+              )}
+
               <button type="submit" disabled={isSaving} className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                 {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {editingId ? 'บันทึกการแก้ไข' : 'บันทึกภาระผ่อน'}
