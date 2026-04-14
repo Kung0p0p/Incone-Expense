@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A single income or expense record",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "note": { "type": "string" }
+      },
+      "required": ["type", "amount", "category", "date"]
+    },
+    "Installment": {
+      "title": "Installment",
+      "description": "A recurring payment record",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "creditCard": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "monthlyAmount": { "type": "number" },
+        "monthsTotal": { "type": "number" },
+        "monthsPaid": { "type": "number" },
+        "nextDueDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["active", "completed"] }
+      },
+      "required": ["name", "totalAmount", "monthlyAmount", "monthsTotal", "monthsPaid", "nextDueDate", "status"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "A savings goal record",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["in_progress", "completed"] }
+      },
+      "required": ["name", "targetAmount", "currentAmount", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User's income and expense transactions"
+    },
+    "/users/{userId}/installments/{installmentId}": {
+      "schema": "Installment",
+      "description": "User's installment plans"
+    },
+    "/users/{userId}/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "User's savings goals"
+    }
+  }
+}

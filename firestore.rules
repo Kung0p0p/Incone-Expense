@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users/{userId}/transactions
+    // Fields:
+    //   - type: string ("income" | "expense")
+    //   - amount: number
+    //   - category: string
+    //   - date: string (ISO date)
+    //   - note: string (optional)
+    //
+    // Collection: users/{userId}/installments
+    // Fields:
+    //   - name: string
+    //   - creditCard: string (optional)
+    //   - totalAmount: number
+    //   - monthlyAmount: number
+    //   - monthsTotal: number
+    //   - monthsPaid: number
+    //   - nextDueDate: string (ISO date)
+    //   - status: string ("active" | "completed")
+    //
+    // Collection: users/{userId}/goals
+    // Fields:
+    //   - name: string
+    //   - targetAmount: number
+    //   - currentAmount: number
+    //   - status: string ("in_progress" | "completed")
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['type', 'amount', 'category', 'date']) &&
+             data.type in ['income', 'expense'] &&
+             data.amount is number && data.amount >= 0 &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
+             data.date is string &&
+             (!('note' in data) || (data.note is string && data.note.size() < 500));
+    }
+
+    function isValidInstallment(data) {
+      return data.keys().hasAll(['name', 'totalAmount', 'monthlyAmount', 'monthsTotal', 'monthsPaid', 'nextDueDate', 'status']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             data.monthlyAmount is number && data.monthlyAmount >= 0 &&
+             data.monthsTotal is int && data.monthsTotal > 0 &&
+             data.monthsPaid is int && data.monthsPaid >= 0 &&
+             data.nextDueDate is string &&
+             data.status in ['active', 'completed'] &&
+             (!('creditCard' in data) || (data.creditCard is string && data.creditCard.size() < 50));
+    }
+
+    function isValidGoal(data) {
+      return data.keys().hasAll(['name', 'targetAmount', 'currentAmount', 'status']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.targetAmount is number && data.targetAmount >= 0 &&
+             data.currentAmount is number && data.currentAmount >= 0 &&
+             data.status in ['in_progress', 'completed'];
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /installments/{installmentId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidInstallment(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /goals/{goalId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidGoal(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+    
+    // Legacy path support if needed by the provided code
+    match /artifacts/{appId}/users/{userId}/{collectionName}/{docId} {
+       allow read, write: if isOwner(userId);
+    }
+  }
+}

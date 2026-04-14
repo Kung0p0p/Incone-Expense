@@ -1,0 +1,5 @@
+{
+  "name": "SmartFinance - Equipment Tracking Dashboard",
+  "description": "A comprehensive financial dashboard for tracking income, expenses, installments, and savings goals with real-time Firebase sync.",
+  "requestFramePermissions": []
+}
