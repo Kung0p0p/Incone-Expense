@@ -469,7 +469,25 @@ export default function App() {
             <div className="space-y-6 max-w-6xl mx-auto">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-                  <h2 className="text-teal-100 text-sm font-medium mb-1">ยอดเงินคงเหลือปัจจุบัน</h2>
+                  <div className="flex justify-between items-start mb-1">
+                    <h2 className="text-teal-100 text-sm font-medium">ยอดเงินคงเหลือปัจจุบัน</h2>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={openAddIncome}
+                        className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                        title="เพิ่มรายรับ"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={openAddTransaction}
+                        className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                        title="เพิ่มรายจ่าย"
+                      >
+                        <ArrowDownCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                   <div className="text-4xl font-bold mb-4">{formatMoney(balance)}</div>
                   <div className="flex justify-between items-center border-t border-teal-400/30 pt-4">
                     <div><div className="text-teal-100 text-xs mb-1">รายรับ</div><div className="flex items-center text-sm font-semibold"><ArrowUpCircle className="w-4 h-4 mr-1 text-teal-200" />{formatMoney(totalIncome)}</div></div>
@@ -722,10 +740,14 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                                   <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">ยอดผ่อนต่อเดือน</div>
                                   <div className="font-bold text-rose-500 text-lg">{formatMoney(item.monthlyAmount)}</div>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                  <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">ยอดรวมทั้งหมด</div>
+                                  <div className="font-bold text-slate-700 text-lg">{formatMoney(item.totalAmount)}</div>
                                 </div>
                                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                                   <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">ยอดหนี้คงเหลือ</div>
