@@ -27,7 +27,7 @@ export default function App() {
   const [fundPromptDialog, setFundPromptDialog] = useState({ isOpen: false, goal: null as any, amount: '' });
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [tForm, setTForm] = useState({ type: 'expense', amount: '', category: '', customCategory: '', date: new Date().toISOString().split('T')[0], note: '' });
-  const [iForm, setIForm] = useState({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total' as 'total' | 'monthly', monthlyInput: '' });
+  const [iForm, setIForm] = useState({ name: '', creditCard: '', category: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total' as 'total' | 'monthly', monthlyInput: '' });
   const [gForm, setGForm] = useState({ name: '', targetAmount: '' });
   const [selectedForecastMonth, setSelectedForecastMonth] = useState(0);
   const [selectedTransactionMonth, setSelectedTransactionMonth] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
@@ -120,6 +120,14 @@ export default function App() {
     return months;
   }, [installments, expectedIncome, transactions]);
 
+  const changeTransactionMonth = (delta: number) => {
+    const [year, month] = selectedTransactionMonth.split('-').map(Number);
+    const date = new Date(year, month - 1 + delta, 1);
+    const newYear = date.getFullYear();
+    const newMonth = String(date.getMonth() + 1).padStart(2, '0');
+    setSelectedTransactionMonth(`${newYear}-${newMonth}`);
+  };
+
   const handleSaveTransaction = async (e: any) => {
     e.preventDefault();
     if (isSaving) return;
@@ -164,12 +172,12 @@ export default function App() {
       const monthsPaid = existing ? existing.monthsPaid : 0;
 
       await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'installments', id), {
-        name: iForm.name, creditCard: iForm.creditCard || '', totalAmount: total, monthlyAmount: total / months,
+        name: iForm.name, creditCard: iForm.creditCard || '', category: iForm.category || 'อื่นๆ', totalAmount: total, monthlyAmount: total / months,
         monthsTotal: months, monthsPaid: monthsPaid, nextDueDate: iForm.nextDueDate, status: monthsPaid >= months ? 'completed' : 'active'
       });
       setIsInstallmentModalOpen(false);
       setEditingId(null);
-      setIForm({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total', monthlyInput: '' });
+      setIForm({ name: '', creditCard: '', category: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total', monthlyInput: '' });
     } catch (error) {
       console.error("Error saving installment:", error);
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
@@ -308,7 +316,7 @@ export default function App() {
 
   const openAddInstallment = () => {
     setEditingId(null);
-    setIForm({ name: '', creditCard: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total', monthlyInput: '' });
+    setIForm({ name: '', creditCard: '', category: '', totalAmount: '', monthsTotal: '', nextDueDate: '', inputMode: 'total', monthlyInput: '' });
     setIsInstallmentModalOpen(true);
   };
 
@@ -329,6 +337,7 @@ export default function App() {
     setIForm({ 
       name: i.name, 
       creditCard: i.creditCard, 
+      category: i.category || '',
       totalAmount: i.totalAmount.toString(), 
       monthsTotal: i.monthsTotal.toString(), 
       nextDueDate: i.nextDueDate,
@@ -349,6 +358,7 @@ export default function App() {
     setIForm({ 
       name: t.note || t.category, 
       creditCard: '', 
+      category: t.category,
       totalAmount: t.amount.toString(), 
       monthsTotal: '10', 
       nextDueDate: t.date,
@@ -613,7 +623,7 @@ export default function App() {
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="w-full md:w-1/2 space-y-2 mt-4 md:mt-0">
+                    <div className="w-full md:w-1/2 space-y-2 mt-4 md:mt-0 max-h-[300px] overflow-y-auto pr-2">
                       {categoryData.length > 0 ? categoryData.map((item, index) => (
                         <div key={index} className="flex items-center justify-between text-xs">
                           <div className="flex items-center">
@@ -633,58 +643,110 @@ export default function App() {
           )}
 
           {activeTab === 'transactions' && (
-            <div className="space-y-4 max-w-5xl mx-auto">
+            <div className="space-y-4 max-w-7xl mx-auto">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                 <h2 className="text-2xl font-bold text-slate-800">รายรับ-รายจ่าย</h2>
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-1.5 flex items-center gap-2 flex-1 md:flex-none">
-                    <Calendar className="w-4 h-4 text-slate-400 ml-2" />
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-1 flex items-center gap-1 flex-1 md:flex-none">
+                    <button 
+                      onClick={() => changeTransactionMonth(-1)}
+                      className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-slate-600" />
+                    </button>
                     <input 
                       type="month" 
                       value={selectedTransactionMonth}
                       onChange={(e) => setSelectedTransactionMonth(e.target.value)}
-                      className="bg-transparent border-none text-sm font-bold text-indigo-600 outline-none cursor-pointer"
+                      className="bg-transparent border-none text-sm font-bold text-indigo-600 outline-none cursor-pointer px-1"
                     />
+                    <button 
+                      onClick={() => changeTransactionMonth(1)}
+                      className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4 text-slate-600" />
+                    </button>
                   </div>
                   <button onClick={openAddTransaction} className="bg-teal-500 text-white px-5 py-2.5 rounded-xl text-sm font-medium flex items-center whitespace-nowrap"><Plus className="w-4 h-4 mr-2" /> เพิ่มรายการ</button>
                 </div>
               </div>
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                {transactions.filter(t => t.date.startsWith(selectedTransactionMonth)).length > 0 ? (
-                  transactions
-                    .filter(t => t.date.startsWith(selectedTransactionMonth))
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .map((t, index) => (
-                      <div key={t.id} className={`p-4 flex justify-between items-center ${index !== 0 ? 'border-t border-slate-100' : ''}`}>
-                        <div className="flex items-center gap-4">
-                          <div className={`p-3 rounded-full ${t.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                            {t.type === 'income' ? <ArrowUpCircle className="w-6 h-6" /> : <ArrowDownCircle className="w-6 h-6" />}
-                          </div>
-                          <div><div className="font-semibold text-slate-800">{t.category}</div><div className="text-xs text-slate-400">{t.date}</div></div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right"><div className={`font-bold ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.type === 'income' ? '+' : '-'}{formatMoney(t.amount)}</div></div>
-                          <div className="flex items-center gap-1">
-                            {t.type === 'expense' && (
-                              <button 
-                                onClick={() => convertToInstallment(t)} 
-                                className="p-2 text-slate-300 hover:text-indigo-500 transition-colors"
-                                title="เปลี่ยนเป็นรายการผ่อน"
-                              >
-                                <CreditCard className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button onClick={() => openEditTransaction(t)} className="p-2 text-slate-300 hover:text-indigo-500 transition-colors"><Pencil className="w-4 h-4" /></button>
-                            <button onClick={() => requestDeleteTransaction(t.id)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 className="w-5 h-5" /></button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                ) : (
-                  <div className="p-12 text-center text-slate-400 italic">
-                    ไม่มีรายการในเดือนนี้
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-400 text-xs uppercase tracking-wider">รายการผ่อนชำระ (เดือนนี้)</h3>
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100">
+                            <th className="px-2 py-2 text-[10px] font-bold text-slate-600">ชื่อรายการ</th>
+                            <th className="px-2 py-2 text-[10px] font-bold text-slate-600">ยอดที่จ่าย</th>
+                            <th className="px-2 py-2 text-[10px] font-bold text-slate-600">บัตร</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const [y, m] = selectedTransactionMonth.split('-').map(Number);
+                            const dDate = new Date(y, m - 1, 1);
+                            const monthInsts = installments.filter(inst => {
+                              if (inst.status === 'completed') return false;
+                              const nextDate = new Date(inst.nextDueDate);
+                              const monthDiff = (dDate.getFullYear() - nextDate.getFullYear()) * 12 + (dDate.getMonth() - nextDate.getMonth());
+                              return monthDiff >= 0 && monthDiff < inst.monthsTotal && monthDiff >= inst.monthsPaid;
+                            });
+
+                            return monthInsts.length > 0 ? monthInsts.map((inst, idx) => (
+                              <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                <td className="px-2 py-2 font-bold text-slate-700 text-sm">{inst.name}</td>
+                                <td className="px-2 py-2 text-rose-500 font-bold text-sm">{formatMoney(inst.monthlyAmount)}</td>
+                                <td className="px-2 py-2 text-[10px] text-slate-500">{inst.creditCard || '-'}</td>
+                              </tr>
+                            )) : (
+                              <tr><td colSpan={3} className="px-2 py-8 text-center text-slate-400 italic text-sm">ไม่มีรายการผ่อน</td></tr>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                )}
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-400 text-xs uppercase tracking-wider">รายการรายรับ-รายจ่ายทั่วไป</h3>
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="max-h-[480px] overflow-y-auto">
+                      {transactions.filter(t => t.date.startsWith(selectedTransactionMonth)).length > 0 ? (
+                      transactions
+                        .filter(t => t.date.startsWith(selectedTransactionMonth))
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                        .map((t, index) => (
+                          <div key={t.id} className={`p-3 flex justify-between items-center ${index !== 0 ? 'border-t border-slate-100' : ''}`}>
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                {t.type === 'income' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-slate-800 text-sm">{t.category}</div>
+                                <div className="text-[10px] text-slate-400">{t.date}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className={`font-bold text-sm ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {t.type === 'income' ? '+' : '-'}{formatMoney(t.amount)}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openEditTransaction(t)} className="p-1.5 text-slate-300 hover:text-indigo-500 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => requestDeleteTransaction(t.id)} className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="p-12 text-center text-slate-400 italic text-sm">ไม่มีรายการในเดือนนี้</div>
+                    )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -701,9 +763,9 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Main Content: Installment List */}
-                <div className="lg:col-span-8 space-y-4">
+                <div className="md:col-span-2 space-y-4 max-h-[800px] overflow-y-auto pr-2">
                   {installments.length > 0 ? (
                     installments
                       .sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1))
@@ -723,6 +785,9 @@ export default function App() {
                                   <div>
                                     <h3 className="font-bold text-slate-800 text-lg">{item.name}</h3>
                                     <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-xs font-bold text-slate-400">
+                                        {item.category || 'อื่นๆ'}
+                                      </span>
                                       <span className="text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md border border-slate-200">
                                         {item.creditCard || 'ไม่ระบุบัตร'}
                                       </span>
@@ -806,7 +871,7 @@ export default function App() {
                 </div>
 
                 {/* Sidebar: Summary Stats */}
-                <div className="lg:col-span-4 space-y-6">
+                <div className="md:col-span-1 space-y-6">
                   <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 sticky top-24">
                     <h3 className="font-bold text-slate-800 mb-6 flex items-center">
                       <TrendingUp className="w-5 h-5 mr-2 text-indigo-500" /> สรุปภาพรวมหนี้ผ่อน
@@ -859,15 +924,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <AlertCircle className="w-4 h-4 text-indigo-200" />
-                          <span className="text-xs font-bold">ข้อแนะนำการเงิน</span>
-                        </div>
-                        <p className="text-[11px] leading-relaxed text-indigo-100">
-                          ยอดผ่อนชำระต่อเดือนไม่ควรเกิน 30-40% ของรายได้สุทธิ เพื่อให้คุณยังมีสภาพคล่องในการใช้จ่ายส่วนอื่นๆ
-                        </p>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -969,25 +1025,26 @@ export default function App() {
 
                {/* Selected Month Summary */}
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                   <div className="text-slate-400 text-xs font-medium mb-1">รายรับรวม ({monthlyForecast[selectedForecastMonth].label})</div>
-                   <div className="text-2xl font-bold text-emerald-600">{formatMoney(monthlyForecast[selectedForecastMonth].income)}</div>
+                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                   <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">รายรับรวม ({monthlyForecast[selectedForecastMonth].label})</div>
+                   <div className="text-xl font-bold text-emerald-600">{formatMoney(monthlyForecast[selectedForecastMonth].income)}</div>
                  </div>
-                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                   <div className="text-slate-400 text-xs font-medium mb-1">รายจ่ายรวม (ผ่อน + ทั่วไป)</div>
-                   <div className="text-2xl font-bold text-rose-500">{formatMoney(monthlyForecast[selectedForecastMonth].installments + monthlyForecast[selectedForecastMonth].regularExpenses)}</div>
+                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                   <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">รายจ่ายรวม (ผ่อน + ทั่วไป)</div>
+                   <div className="text-xl font-bold text-rose-500">{formatMoney(monthlyForecast[selectedForecastMonth].installments + monthlyForecast[selectedForecastMonth].regularExpenses)}</div>
                  </div>
-                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                   <div className="text-slate-400 text-xs font-medium mb-1">เงินคงเหลือสุทธิ</div>
-                   <div className={`text-2xl font-bold ${monthlyForecast[selectedForecastMonth].remaining >= 0 ? 'text-teal-600' : 'text-rose-600'}`}>
+                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                   <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">เงินคงเหลือสุทธิ</div>
+                   <div className={`text-xl font-bold ${monthlyForecast[selectedForecastMonth].remaining >= 0 ? 'text-teal-600' : 'text-rose-600'}`}>
                      {formatMoney(monthlyForecast[selectedForecastMonth].remaining)}
                    </div>
                  </div>
                </div>
 
-               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                 <div className="lg:col-span-2 space-y-6">
-                   <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                <div className="space-y-6">
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
                      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                        <h3 className="font-bold text-slate-800">รายการผ่อนชำระในเดือนนี้</h3>
                        <span className="text-xs text-slate-400">{monthlyForecast[selectedForecastMonth].details.length} รายการ</span>
@@ -996,11 +1053,12 @@ export default function App() {
                        <table className="w-full text-left border-collapse">
                          <thead>
                            <tr className="bg-slate-50 border-b border-slate-100">
-                             <th className="px-6 py-4 text-sm font-bold text-slate-600">ชื่อรายการ</th>
-                             <th className="px-6 py-4 text-sm font-bold text-slate-600">บัตรที่ใช้</th>
-                             <th className="px-6 py-4 text-sm font-bold text-slate-600">ยอดที่ต้องจ่าย</th>
-                             <th className="px-6 py-4 text-sm font-bold text-slate-600">งวดที่</th>
-                             <th className="px-6 py-4 text-sm font-bold text-slate-600">สถานะ</th>
+                             <th className="px-3 py-2 text-[10px] font-bold text-slate-600">ชื่อรายการ</th>
+                              <th className="px-3 py-2 text-[10px] font-bold text-slate-600">หมวดหมู่</th>
+                             <th className="px-3 py-2 text-[10px] font-bold text-slate-600">บัตรที่ใช้</th>
+                             <th className="px-3 py-2 text-[10px] font-bold text-slate-600">ยอดที่จ่าย</th>
+                             <th className="px-3 py-2 text-[10px] font-bold text-slate-600">งวดที่</th>
+                             <th className="px-3 py-2 text-[10px] font-bold text-slate-600">จัดการ</th>
                            </tr>
                          </thead>
                          <tbody>
@@ -1013,28 +1071,31 @@ export default function App() {
 
                                return (
                                  <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                   <td className="px-6 py-4 font-bold text-slate-700">{d.name}</td>
-                                   <td className="px-6 py-4">
-                                     <span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-100">
-                                       {d.creditCard || 'ไม่ระบุ'}
-                                     </span>
-                                   </td>
-                                   <td className="px-6 py-4 text-rose-500 font-bold">{formatMoney(d.monthlyAmount)}</td>
-                                   <td className="px-6 py-4 text-slate-500 text-sm">{installmentNum} / {d.monthsTotal}</td>
-                                   <td className="px-6 py-4">
-                                     <button 
-                                       onClick={() => payInstallment(d)}
-                                       className="text-[10px] bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg font-bold transition-colors shadow-sm"
-                                     >
-                                       จ่ายงวดนี้
-                                     </button>
-                                   </td>
+                                <td className="px-2 py-1.5 font-bold text-slate-700 text-[11px]">{d.name}</td>
+                                 <td className="px-2 py-1.5">
+                                   <span className="text-[10px] text-slate-500">{d.category || 'อื่นๆ'}</span>
+                                 </td>
+                                <td className="px-2 py-1.5">
+                                  <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[9px] font-bold border border-indigo-100">
+                                    {d.creditCard || 'ไม่ระบุ'}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-1.5 text-rose-500 font-bold text-[11px]">{formatMoney(d.monthlyAmount)}</td>
+                                <td className="px-2 py-1.5 text-slate-500 text-[9px]">{installmentNum} / {d.monthsTotal}</td>
+                                <td className="px-2 py-1.5">
+                                  <button 
+                                    onClick={() => payInstallment(d)}
+                                    className="text-[8px] bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded-md font-bold transition-colors shadow-sm"
+                                  >
+                                    จ่ายงวดนี้
+                                  </button>
+                                </td>
                                  </tr>
                                );
                              })
                            ) : (
                              <tr>
-                               <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">
+                               <td colSpan={6} className="px-6 py-12 text-center text-slate-400 italic">
                                  ไม่มีรายการผ่อนชำระในเดือนนี้
                                </td>
                              </tr>
@@ -1045,7 +1106,7 @@ export default function App() {
                    </div>
 
                     <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden mb-6">
-                      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                      <div className="p-4 border-b border-slate-100 flex justify-between items-center">
                         <h3 className="font-bold text-slate-800">รายรับ-รายจ่ายทั่วไป (เดือนนี้)</h3>
                         <span className="text-xs text-slate-400">{monthlyForecast[selectedForecastMonth].transactions.length} รายการ</span>
                       </div>
@@ -1053,41 +1114,53 @@ export default function App() {
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-100">
-                              <th className="px-6 py-4 text-sm font-bold text-slate-600">รายการ</th>
-                              <th className="px-6 py-4 text-sm font-bold text-slate-600">หมวดหมู่</th>
-                              <th className="px-6 py-4 text-sm font-bold text-slate-600">จำนวนเงิน</th>
-                              <th className="px-6 py-4 text-sm font-bold text-slate-600">ประเภท</th>
+                              <th className="px-3 py-2 text-[10px] font-bold text-slate-600">รายการ</th>
+                              <th className="px-3 py-2 text-[10px] font-bold text-slate-600">หมวดหมู่</th>
+                              <th className="px-3 py-2 text-[10px] font-bold text-slate-600">จำนวนเงิน</th>
+                              <th className="px-3 py-2 text-[10px] font-bold text-slate-600">ประเภท</th>
+                              <th className="px-3 py-2 text-[10px] font-bold text-slate-600">จัดการ</th>
                             </tr>
                           </thead>
                           <tbody>
                             {monthlyForecast[selectedForecastMonth].transactions.length > 0 ? (
                               monthlyForecast[selectedForecastMonth].transactions.map((tx, idx) => (
                                 <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                  <td className="px-6 py-4 font-bold text-slate-700">{tx.note || 'ไม่ระบุ'}</td>
-                                  <td className="px-6 py-4">
-                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold">
+                                  <td className="px-3 py-2 font-bold text-slate-700 text-sm">{tx.note || 'ไม่ระบุ'}</td>
+                                  <td className="px-3 py-2">
+                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold">
                                       {tx.category}
                                     </span>
                                   </td>
-                                  <td className={`px-6 py-4 font-bold ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  <td className={`px-3 py-2 font-bold text-sm ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
                                   </td>
-                                  <td className="px-6 py-4">
+                                  <td className="px-3 py-2">
                                     {tx.type === 'income' ? (
-                                      <span className="text-emerald-600 flex items-center gap-1 text-xs font-bold">
+                                      <span className="text-emerald-600 flex items-center gap-1 text-[10px] font-bold">
                                         <ArrowUpCircle className="w-3 h-3" /> รายรับ
                                       </span>
                                     ) : (
-                                      <span className="text-rose-600 flex items-center gap-1 text-xs font-bold">
+                                      <span className="text-rose-600 flex items-center gap-1 text-[10px] font-bold">
                                         <ArrowDownCircle className="w-3 h-3" /> รายจ่าย
                                       </span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-center">
+                                    {tx.type === 'expense' && (
+                                      <button 
+                                        onClick={() => convertToInstallment(tx)}
+                                        className="p-1.5 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
+                                        title="เปลี่ยนเป็นรายการผ่อน"
+                                      >
+                                        <CreditCard className="w-3.5 h-3.5" />
+                                      </button>
                                     )}
                                   </td>
                                 </tr>
                               ))
                             ) : (
                               <tr>
-                                <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">
+                                <td colSpan={5} className="px-3 py-8 text-center text-slate-400 italic text-sm">
                                   ไม่มีรายการรายรับ-รายจ่ายทั่วไปในเดือนนี้
                                 </td>
                               </tr>
@@ -1096,36 +1169,48 @@ export default function App() {
                         </table>
                       </div>
                     </div>
+                  </div>
 
-                     <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">สรุปภาพรวม 12 เดือน</h3>
-                     <div className="overflow-x-auto">
-                       <table className="w-full text-left border-collapse">
-                         <thead>
-                           <tr className="bg-slate-50 border-b border-slate-100">
-                             {monthlyForecast.map((m, i) => (
-                               <th key={i} className="px-3 py-2 text-[10px] font-bold text-slate-500 text-center border-r border-slate-100 last:border-0">
-                                 {m.label.split(' ')[0]}
-                               </th>
-                             ))}
-                           </tr>
-                         </thead>
-                         <tbody>
-                           <tr>
-                             {monthlyForecast.map((m, i) => (
-                               <td key={i} className={`px-3 py-2 text-[10px] font-bold text-center border-r border-slate-100 last:border-0 ${m.remaining >= 0 ? 'text-teal-600' : 'text-rose-600'}`}>
-                                 {formatMoney(m.remaining).replace('฿', '')}
-                               </td>
-                             ))}
-                           </tr>
-                         </tbody>
-                       </table>
-                     </div>
-                   </div>
-
-                   <div className="space-y-6">
-                   <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                     <h3 className="font-bold text-slate-800 mb-4">สรุปตามบัตรเครดิต</h3>
-                     <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">สรุปภาพรวม 12 เดือน</h3>
+                  <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="overflow-x-auto lg:overflow-x-visible">
+                      <table className="w-full text-left border-collapse table-fixed">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100">
+                            <th className="px-1 py-2 text-[9px] font-bold text-slate-400 text-center border-r border-slate-100 w-16">หัวข้อ</th>
+                            {monthlyForecast.map((m, i) => (
+                              <th key={i} className="px-1 py-2 text-[9px] font-bold text-slate-600 text-center border-r border-slate-100 last:border-0">
+                                {m.label.split(' ')[0]}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-slate-50">
+                            <td className="px-1 py-2 text-[9px] font-bold text-slate-400 text-center border-r border-slate-100 bg-slate-50/30">คงเหลือ</td>
+                            {monthlyForecast.map((m, i) => (
+                              <td key={i} className={`px-1 py-2 text-[9px] font-bold text-center border-r border-slate-100 last:border-0 ${m.remaining >= 0 ? 'text-teal-600' : 'text-rose-600'}`}>
+                                {formatMoney(m.remaining).replace('฿', '')}
+                              </td>
+                            ))}
+                          </tr>
+                          <tr>
+                            <td className="px-1 py-2 text-[9px] font-bold text-slate-400 text-center border-r border-slate-100 bg-slate-50/30">รายจ่าย</td>
+                            {monthlyForecast.map((m, i) => (
+                              <td key={i} className="px-1 py-2 text-[9px] font-medium text-slate-500 text-center border-r border-slate-100 last:border-0">
+                                {formatMoney(m.installments + m.regularExpenses).replace('฿', '')}
+                              </td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                      <h3 className="font-bold text-slate-800 mb-4">สรุปตามบัตรเครดิต</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                        {creditCardOptions.map(card => {
                          const cardTotal = monthlyForecast[selectedForecastMonth].details
                            .filter(d => d.creditCard === card)
@@ -1162,20 +1247,12 @@ export default function App() {
                        )}
                      </div>
                    </div>
-
-                   <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-lg">
-                     <h3 className="font-bold mb-2">คำแนะนำ</h3>
-                     <p className="text-xs text-indigo-100 leading-relaxed">
-                       ในเดือน {monthlyForecast[selectedForecastMonth].label} คุณมีภาระผ่อนทั้งหมด {monthlyForecast[selectedForecastMonth].details.length} รายการ 
-                       {monthlyForecast[selectedForecastMonth].remaining < 0 ? ' ซึ่งเกินกว่ารายรับคาดการณ์ โปรดวางแผนสำรองเงินล่วงหน้า' : ' ซึ่งยังอยู่ในเกณฑ์ที่จัดการได้'}
-                     </p>
-                   </div>
                  </div>
                </div>
              </div>
-          )}
-        </div>
-      </main>
+           )}
+         </div>
+       </main>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-1.5 pb-safe z-30">
         {menuItems.map((item) => (
@@ -1247,9 +1324,19 @@ export default function App() {
             <button onClick={() => { setIsInstallmentModalOpen(false); setEditingId(null); }} className="absolute right-5 top-5"><X className="w-5 h-5"/></button>
             <h3 className="text-xl font-extrabold mb-5">{editingId ? 'แก้ไขรายการผ่อน' : 'เพิ่มรายการภาระผ่อน'}</h3>
             <form onSubmit={handleSaveInstallment} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 ml-1">ชื่อรายการ (เช่น ผ่อนมือถือ)</label>
-                <input type="text" required value={iForm.name} onChange={e => setIForm({...iForm, name: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="ชื่อรายการ" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 ml-1">ชื่อรายการ</label>
+                  <input type="text" required value={iForm.name} onChange={e => setIForm({...iForm, name: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4" placeholder="ชื่อรายการ" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 ml-1">หมวดหมู่</label>
+                  <select required value={iForm.category} onChange={e => setIForm({...iForm, category: e.target.value})} className="w-full border-2 rounded-xl py-3 px-4">
+                    <option value="" disabled>-- เลือกหมวดหมู่ --</option>
+                    {defaultExpenseCats.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    <option value="อื่นๆ">อื่นๆ</option>
+                  </select>
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 ml-1">บัตรเครดิตที่ใช้</label>
@@ -1452,3 +1539,4 @@ export default function App() {
     </div>
   );
 }
+
